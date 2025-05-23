@@ -26,6 +26,18 @@
 			/*Hides alert box */
 			display: none !important
 		}
+
+		/* Fix for text selection in High Contrast Mode */
+		@media (forced-colors: active) {
+			.monaco-editor .focused .selected-text {
+				background-color: Highlight !important;
+				color: HighlightText !important;
+			}
+			.monaco-editor .selected-text {
+				background-color: Highlight !important;
+				color: HighlightText !important;
+			}
+		}
 	</style>
 </head>
 
