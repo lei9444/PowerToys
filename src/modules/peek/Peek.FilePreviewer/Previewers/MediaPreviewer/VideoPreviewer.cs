@@ -31,6 +31,9 @@ namespace Peek.FilePreviewer.Previewers
         [ObservableProperty]
         private Size videoSize;
 
+        [ObservableProperty]
+        private string? errorMessage;
+
         public VideoPreviewer(IFileSystemItem file)
         {
             Item = file;
@@ -97,23 +100,46 @@ namespace Peek.FilePreviewer.Previewers
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var storageFile = await Item.GetStorageItemAsync() as StorageFile;
-
-                await Dispatcher.RunOnUiThread(() =>
+                bool success = false;
+                
+                await Dispatcher.RunOnUiThread(async () =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    // For MP4 files, use CreateFromUri approach which provides better codec support
-                    // This helps with MP4 files that would otherwise only play audio without showing video
-                    if (Item.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        var fileUri = new Uri(storageFile.Path);
-                        Preview = MediaSource.CreateFromUri(fileUri);
+                        // For MP4 files, try CreateFromUri first as it provides better codec support
+                        // This helps with MP4 files that would otherwise only play audio without showing video
+                        if (Item.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                var fileUri = new Uri(storageFile.Path);
+                                Preview = MediaSource.CreateFromUri(fileUri);
+                                success = true;
+                            }
+                            catch (Exception)
+                            {
+                                // If CreateFromUri fails, fall back to CreateFromStorageFile
+                                Preview = MediaSource.CreateFromStorageFile(storageFile);
+                                success = true;
+                            }
+                        }
+                        else
+                        {
+                            Preview = MediaSource.CreateFromStorageFile(storageFile);
+                            success = true;
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Preview = MediaSource.CreateFromStorageFile(storageFile);
+                        // If all methods fail, it's likely due to missing codecs
+                        ErrorMessage = "This video requires codecs that are not installed on your system";
+                        success = false;
                     }
                 });
+                
+                return success;
             });
         }
 
