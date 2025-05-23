@@ -235,9 +235,19 @@ namespace Peek.FilePreviewer
 
         partial void OnPreviewerChanging(IPreviewer? value)
         {
-            VideoPreview.MediaPlayer.Pause();
-            VideoPreview.MediaPlayer.Source = null;
-            VideoPreview.Source = null;
+            // Properly dispose and recreate MediaPlayer to prevent black screen issue after viewing multiple videos
+            if (VideoPreview.MediaPlayer != null)
+            {
+                VideoPreview.MediaPlayer.Pause();
+                VideoPreview.MediaPlayer.Source = null;
+                VideoPreview.Source = null;
+                
+                // Create a new MediaPlayer to ensure clean state for the next video
+                var oldMediaPlayer = VideoPreview.MediaPlayer;
+                VideoPreview.SetMediaPlayer(new Windows.Media.Playback.MediaPlayer());
+                oldMediaPlayer.Dispose();
+            }
+            
             AudioPreview.Source = null;
             ImagePreview.Source = null;
             ArchivePreview.Source = null;
