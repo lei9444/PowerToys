@@ -102,7 +102,16 @@ namespace Peek.FilePreviewer.Previewers
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    Preview = MediaSource.CreateFromStorageFile(storageFile);
+                    // For MP4 files, use CreateFromUri approach which provides better codec support
+                    if (Item.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var fileUri = new Uri(storageFile.Path);
+                        Preview = MediaSource.CreateFromUri(fileUri);
+                    }
+                    else
+                    {
+                        Preview = MediaSource.CreateFromStorageFile(storageFile);
+                    }
                 });
             });
         }
