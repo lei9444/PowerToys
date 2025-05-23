@@ -28,9 +28,6 @@ namespace Peek.FilePreviewer.Previewers
             ".html",
             ".htm",
 
-            // Document
-            ".pdf",
-
             // Markdown
             ".md",
         };
