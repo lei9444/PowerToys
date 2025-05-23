@@ -112,10 +112,14 @@
                     // Render scrollbar automatically
                     vertical: 'auto',
                     horizontal: 'auto',
+                    
+                    // Allow scrolling on both axes simultaneously (fixes trackpad scrolling issue)
+                    scrollPredominantAxis: false,
                 },
                 stickyScroll: { enabled: stickyScroll },
                 fontSize: fontSize,
-                wordWrap: (wrap ? 'on' : 'off') // Word wraps
+                wordWrap: (wrap ? 'on' : 'off'), // Word wraps
+                mouseWheelScrollSensitivity: 1 // Standard scrolling sensitivity
             });
             window.onresize = () => {
                 editor.layout();
