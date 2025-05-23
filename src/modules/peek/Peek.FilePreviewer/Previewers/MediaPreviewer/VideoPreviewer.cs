@@ -103,6 +103,7 @@ namespace Peek.FilePreviewer.Previewers
                     cancellationToken.ThrowIfCancellationRequested();
 
                     // For MP4 files, use CreateFromUri approach which provides better codec support
+                    // This helps with MP4 files that would otherwise only play audio without showing video
                     if (Item.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
                     {
                         var fileUri = new Uri(storageFile.Path);
