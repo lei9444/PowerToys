@@ -16,6 +16,8 @@ using Peek.FilePreviewer.Models;
 using Peek.FilePreviewer.Previewers.Interfaces;
 using Windows.Foundation;
 using Windows.Media.Core;
+using Windows.Media.MediaProperties;
+using Windows.Media.Transcoding;
 using Windows.Storage;
 
 namespace Peek.FilePreviewer.Previewers
@@ -30,6 +32,9 @@ namespace Peek.FilePreviewer.Previewers
 
         [ObservableProperty]
         private Size videoSize;
+
+        [ObservableProperty]
+        private string? errorMessage;
 
         public VideoPreviewer(IFileSystemItem file)
         {
@@ -90,6 +95,40 @@ namespace Peek.FilePreviewer.Previewers
             });
         }
 
+        private async Task<bool> IsCodecSupportedAsync(StorageFile file)
+        {
+            try
+            {
+                // Create a MediaEncodingProfile from the file to check codec compatibility
+                var profile = await MediaEncodingProfile.CreateFromFileAsync(file);
+                
+                // Use MediaTranscoder to check if the file can be transcoded (which indicates codec support)
+                var transcoder = new MediaTranscoder
+                {
+                    AlwaysReencode = false,
+                    HardwareAccelerationEnabled = true,
+                };
+
+                // We're not actually transcoding, just checking if we could
+                // Use the same profile as input and output for this test
+                var prepareResult = await transcoder.PrepareFileTranscodeAsync(file, file, profile);
+                
+                // If we can't transcode with hardware acceleration, try without it
+                if (!prepareResult.CanTranscode && prepareResult.FailureReason == TranscodeFailureReason.HardwareNotAvailable)
+                {
+                    transcoder.HardwareAccelerationEnabled = false;
+                    prepareResult = await transcoder.PrepareFileTranscodeAsync(file, file, profile);
+                }
+                
+                return prepareResult.CanTranscode;
+            }
+            catch (Exception)
+            {
+                // If the profile creation fails, we assume the codec is not supported
+                return false;
+            }
+        }
+
         private Task<bool> LoadVideoAsync(CancellationToken cancellationToken)
         {
             return TaskExtension.RunSafe(async () =>
@@ -97,13 +136,57 @@ namespace Peek.FilePreviewer.Previewers
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var storageFile = await Item.GetStorageItemAsync() as StorageFile;
-
-                await Dispatcher.RunOnUiThread(() =>
+                bool success = false;
+                
+                // First, check if the codec is supported for this file
+                bool isCodecSupported = await IsCodecSupportedAsync(storageFile);
+                
+                await Dispatcher.RunOnUiThread(async () =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    Preview = MediaSource.CreateFromStorageFile(storageFile);
+                    try
+                    {
+                        if (!isCodecSupported)
+                        {
+                            // If codec is not supported, show error message immediately
+                            ErrorMessage = "This video requires codecs that are not installed on your system";
+                            success = false;
+                            return;
+                        }
+                        
+                        // For MP4 files, try CreateFromUri first as it provides better codec support
+                        // This helps with MP4 files that would otherwise only play audio without showing video
+                        if (Item.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                var fileUri = new Uri(storageFile.Path);
+                                Preview = MediaSource.CreateFromUri(fileUri);
+                                success = true;
+                            }
+                            catch (Exception)
+                            {
+                                // If CreateFromUri fails, fall back to CreateFromStorageFile
+                                Preview = MediaSource.CreateFromStorageFile(storageFile);
+                                success = true;
+                            }
+                        }
+                        else
+                        {
+                            Preview = MediaSource.CreateFromStorageFile(storageFile);
+                            success = true;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // If all methods fail, it's likely due to missing codecs
+                        ErrorMessage = "This video requires codecs that are not installed on your system";
+                        success = false;
+                    }
                 });
+                
+                return success;
             });
         }
 

@@ -155,6 +155,15 @@ namespace Peek.FilePreviewer
             return isValidPreview ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        public Visibility IsErrorMessageVisible(IVideoPreviewer? previewer)
+        {
+            var shouldShow = previewer != null && 
+                             MatchPreviewState(previewer.State, PreviewState.Error) && 
+                             !string.IsNullOrEmpty(previewer.ErrorMessage);
+            
+            return shouldShow ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private async Task OnItemPropertyChanged()
         {
             // Cancel previous loading task

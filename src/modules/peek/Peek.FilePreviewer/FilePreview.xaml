@@ -60,6 +60,15 @@
             </MediaPlayerElement.TransportControls>
         </MediaPlayerElement>
 
+        <TextBlock 
+            x:Name="VideoErrorMessage" 
+            HorizontalAlignment="Center" 
+            VerticalAlignment="Center" 
+            Foreground="{StaticResource TextFillColorSecondaryBrush}" 
+            Text="{x:Bind VideoPreviewer.ErrorMessage, Mode=OneWay}" 
+            TextWrapping="Wrap" 
+            Visibility="{x:Bind IsErrorMessageVisible(VideoPreviewer), Mode=OneWay}" />
+
         <controls:AudioControl
             x:Name="AudioPreview"
             Source="{x:Bind AudioPreviewer.Preview, Mode=OneWay}"
