@@ -389,6 +389,15 @@ namespace Microsoft.PowerToys.PreviewHandler.Monaco
                 }
 
                 fileReader.Close();
+                
+                // Remove BOM character if present to avoid encoding issues when converting to base64
+                // BOM character might be present as U+FEFF even though StreamReader should normally handle it
+                if (fileContent.Length > 0 && fileContent[0] == '\uFEFF')
+                {
+                    fileContent = fileContent.Substring(1);
+                    Logger.LogInfo("Removed UTF-8 BOM character from file content");
+                }
+                
                 _base64FileCode = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(fileContent));
                 Logger.LogInfo("Reading requested file ended");
             }
