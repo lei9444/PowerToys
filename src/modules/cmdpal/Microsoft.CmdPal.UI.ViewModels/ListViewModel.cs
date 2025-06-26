@@ -215,7 +215,9 @@ public partial class ListViewModel : PageViewModel, IDisposable
                     {
                         // A dynamic list? Even better! Just stick everything into
                         // FilteredItems. The extension already did any filtering it cared about.
-                        ListHelpers.InPlaceUpdateList(FilteredItems, Items.Where(i => !i.IsInErrorState));
+                        // Materialize the collection to avoid race conditions during enumeration
+                        var itemsWithoutErrors = Items.Where(i => !i.IsInErrorState).ToList();
+                        ListHelpers.InPlaceUpdateList(FilteredItems, itemsWithoutErrors);
                     }
 
                     UpdateEmptyContent();
@@ -256,7 +258,7 @@ public partial class ListViewModel : PageViewModel, IDisposable
     /// Apply our current filter text to the list of items, and update
     /// FilteredItems to match the results.
     /// </summary>
-    private void ApplyFilterUnderLock() => ListHelpers.InPlaceUpdateList(FilteredItems, FilterList(Items, Filter));
+    private void ApplyFilterUnderLock() => ListHelpers.InPlaceUpdateList(FilteredItems, FilterList(Items, Filter).ToList());
 
     /// <summary>
     /// Helper to generate a weighting for a given list item, based on title,
