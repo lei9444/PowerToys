@@ -69,12 +69,18 @@ public partial class ListHelpers
         // we're not changing newContents - stash this so we don't re-evaluate it every time
         var numberOfNew = newContents.Count();
 
+        // TESTING: Add delay to make race condition easier to reproduce
+        System.Threading.Thread.Sleep(50);
+
         // Short circuit - new contents should just be empty
         if (numberOfNew == 0)
         {
             original.Clear();
             return;
         }
+
+        // TESTING: Another delay before enumeration to widen race condition window
+        System.Threading.Thread.Sleep(25);
 
         var i = 0;
         foreach (var newItem in newContents)

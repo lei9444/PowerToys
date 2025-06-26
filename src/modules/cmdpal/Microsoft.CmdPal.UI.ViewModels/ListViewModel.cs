@@ -34,6 +34,9 @@ public partial class ListViewModel : PageViewModel, IDisposable
     private bool _isLoading;
     private bool _isFetching;
 
+    // TESTING: Field to control stress testing for race condition reproduction
+    private System.Threading.CancellationTokenSource? _stressTestCancellation;
+
     public event TypedEventHandler<ListViewModel, object>? ItemsUpdated;
 
     public bool ShowEmptyContent =>
@@ -77,6 +80,12 @@ public partial class ListViewModel : PageViewModel, IDisposable
     {
         _model = new(model);
         EmptyContent = new(new(null), PageContext);
+        
+        // TESTING: Start stress testing in debug builds to make race condition easier to reproduce
+        #if DEBUG
+        // Uncomment the line below to enable stress testing for race condition reproduction
+        // StartStressTesting();
+        #endif
     }
 
     // TODO: Does this need to hop to a _different_ thread, so that we don't block the extension while we're fetching?
@@ -534,9 +543,67 @@ public partial class ListViewModel : PageViewModel, IDisposable
            });
     }
 
+    // TESTING: Methods to make race condition easier to reproduce
+    public void StartStressTesting()
+    {
+        _stressTestCancellation?.Cancel();
+        _stressTestCancellation = new System.Threading.CancellationTokenSource();
+        
+        // Start a background task that rapidly modifies the Items collection
+        _ = Task.Run(async () =>
+        {
+            var random = new Random();
+            while (!_stressTestCancellation.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    // Simulate adding and removing items rapidly
+                    lock (_listLock)
+                    {
+                        if (Items.Count > 0)
+                        {
+                            // Randomly remove an item
+                            if (random.Next(2) == 0 && Items.Count > 0)
+                            {
+                                Items.RemoveAt(random.Next(Items.Count));
+                            }
+                            
+                            // Add a dummy item
+                            var dummyItem = new ListItemViewModel(new(null), PageContext);
+                            Items.Add(dummyItem);
+                        }
+                    }
+                    
+                    // Small delay between modifications
+                    await Task.Delay(10, _stressTestCancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch
+                {
+                    // Ignore other exceptions during stress testing
+                }
+            }
+        }, _stressTestCancellation.Token);
+    }
+
+    public void StopStressTesting()
+    {
+        _stressTestCancellation?.Cancel();
+        _stressTestCancellation = null;
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);
+        
+        // TESTING: Stop stress testing
+        _stressTestCancellation?.Cancel();
+        _stressTestCancellation?.Dispose();
+        _stressTestCancellation = null;
+        
         _cancellationTokenSource?.Cancel();
         _cancellationTokenSource?.Dispose();
         _cancellationTokenSource = null;
