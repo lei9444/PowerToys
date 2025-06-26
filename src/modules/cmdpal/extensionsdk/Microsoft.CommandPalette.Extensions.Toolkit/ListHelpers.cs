@@ -66,9 +66,11 @@ public partial class ListHelpers
     public static void InPlaceUpdateList<T>(IList<T> original, IEnumerable<T> newContents)
         where T : class
     {
-        // Materialize the enumerable to avoid concurrent modification issues
-        var newList = newContents?.ToList() ?? new List<T>();
-        var numberOfNew = newList.Count;
+        // we're not changing newContents - stash this so we don't re-evaluate it every time
+        var numberOfNew = newContents.Count();
+
+        // TESTING: Add delay to make race condition easier to reproduce
+        System.Threading.Thread.Sleep(50);
 
         // Short circuit - new contents should just be empty
         if (numberOfNew == 0)
@@ -77,8 +79,11 @@ public partial class ListHelpers
             return;
         }
 
+        // TESTING: Another delay before enumeration to widen race condition window
+        System.Threading.Thread.Sleep(25);
+
         var i = 0;
-        foreach (var newItem in newList)
+        foreach (var newItem in newContents)
         {
             if (i >= original.Count)
             {
@@ -128,7 +133,7 @@ public partial class ListHelpers
         // Add any extra trailing items from the source
         if (original.Count < numberOfNew)
         {
-            var remaining = newList.Skip(original.Count);
+            var remaining = newContents.Skip(original.Count);
             foreach (var item in remaining)
             {
                 original.Add(item);
