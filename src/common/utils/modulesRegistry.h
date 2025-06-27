@@ -270,7 +270,7 @@ inline registry::ChangeSet getRegistryPreviewChangeSet(const std::wstring instal
 
 inline std::vector<registry::ChangeSet> getAllOnByDefaultModulesChangeSets(const std::wstring installationDir)
 {
-    constexpr bool PER_USER = true;
+    const bool PER_USER = (registry::install_scope::get_current_install_scope() == registry::install_scope::InstallScope::PerUser);
     return { getSvgPreviewHandlerChangeSet(installationDir, PER_USER),
              getMdPreviewHandlerChangeSet(installationDir, PER_USER),
              getMonacoPreviewHandlerChangeSet(installationDir, PER_USER),
@@ -285,7 +285,7 @@ inline std::vector<registry::ChangeSet> getAllOnByDefaultModulesChangeSets(const
 
 inline std::vector<registry::ChangeSet> getAllModulesChangeSets(const std::wstring installationDir)
 {
-    constexpr bool PER_USER = true;
+    const bool PER_USER = (registry::install_scope::get_current_install_scope() == registry::install_scope::InstallScope::PerUser);
     return { getSvgPreviewHandlerChangeSet(installationDir, PER_USER),
              getMdPreviewHandlerChangeSet(installationDir, PER_USER),
              getMonacoPreviewHandlerChangeSet(installationDir, PER_USER),
