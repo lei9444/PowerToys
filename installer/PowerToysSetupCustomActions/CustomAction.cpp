@@ -23,6 +23,8 @@
 #include <processthreadsapi.h>
 #include <UserEnv.h>
 #include <winnt.h>
+#include <aclapi.h>
+#include <sddl.h>
 
 using namespace std;
 
@@ -1153,7 +1155,115 @@ UINT __stdcall UnRegisterContextMenuPackagesCA(MSIHANDLE hInstall)
     return WcaFinalize(er);
 }
 
-UINT __stdcall TerminateProcessesCA(MSIHANDLE hInstall)
+UINT __stdcall FixPerUserInstallDirectoryPermissionsCA(MSIHANDLE hInstall)
+{
+    HRESULT hr = S_OK;
+    UINT er = ERROR_SUCCESS;
+    std::wstring installationFolder;
+
+    hr = WcaInitialize(hInstall, "FixPerUserInstallDirectoryPermissions");
+    ExitOnFailure(hr, "Failed to initialize");
+
+    // Only apply this fix for per-user installations
+    LPWSTR currentScope = nullptr;
+    hr = WcaGetProperty(L"InstallScope", &currentScope);
+    ExitOnFailure(hr, "Failed to get InstallScope property");
+
+    if (!currentScope || std::wstring{currentScope} != L"perUser")
+    {
+        Logger::info(L"Not a per-user installation, skipping directory permission fix");
+        goto LExit;
+    }
+
+    hr = getInstallFolder(hInstall, installationFolder);
+    ExitOnFailure(hr, "Failed to get installFolder.");
+
+    Logger::info(L"Fixing directory permissions for per-user installation at: {}", installationFolder);
+
+    // Get the current user's SID
+    HANDLE hToken = NULL;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+    {
+        hr = HRESULT_FROM_WIN32(GetLastError());
+        ExitOnFailure(hr, "Failed to open process token");
+    }
+
+    DWORD dwSize = 0;
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+    {
+        hr = HRESULT_FROM_WIN32(GetLastError());
+        CloseHandle(hToken);
+        ExitOnFailure(hr, "Failed to get token information size");
+    }
+
+    std::vector<BYTE> tokenUserBuffer(dwSize);
+    PTOKEN_USER pTokenUser = reinterpret_cast<PTOKEN_USER>(tokenUserBuffer.data());
+    
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize))
+    {
+        hr = HRESULT_FROM_WIN32(GetLastError());
+        CloseHandle(hToken);
+        ExitOnFailure(hr, "Failed to get token information");
+    }
+
+    CloseHandle(hToken);
+
+    // Create ACL entries for both the current user and Interactive Users
+    // This ensures preview handlers work properly in different security contexts
+    PACL pACL = NULL;
+    EXPLICIT_ACCESS ea[2] = {};
+    
+    // Entry for current user
+    ea[0].grfAccessPermissions = FILE_ALL_ACCESS;
+    ea[0].grfAccessMode = SET_ACCESS;
+    ea[0].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+    ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea[0].Trustee.ptstrName = (LPTSTR)pTokenUser->User.Sid;
+    
+    // Entry for Interactive Users (this helps with preview handlers running in different contexts)
+    ea[1].grfAccessPermissions = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
+    ea[1].grfAccessMode = SET_ACCESS;
+    ea[1].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+    ea[1].Trustee.TrusteeForm = TRUSTEE_IS_NAME;
+    ea[1].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+    ea[1].Trustee.ptstrName = const_cast<LPWSTR>(L"INTERACTIVE");
+
+    DWORD dwRes = SetEntriesInAcl(2, ea, NULL, &pACL);
+    if (ERROR_SUCCESS != dwRes)
+    {
+        hr = HRESULT_FROM_WIN32(dwRes);
+        ExitOnFailure(hr, "Failed to create ACL");
+    }
+
+    // Apply the ACL to the installation directory
+    dwRes = SetNamedSecurityInfo(
+        const_cast<LPWSTR>(installationFolder.c_str()),
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION,
+        NULL,
+        NULL,
+        pACL,
+        NULL);
+
+    if (pACL)
+    {
+        LocalFree(pACL);
+    }
+
+    if (ERROR_SUCCESS != dwRes)
+    {
+        hr = HRESULT_FROM_WIN32(dwRes);
+        ExitOnFailure(hr, "Failed to set directory permissions");
+    }
+
+    Logger::info(L"Successfully fixed directory permissions for per-user installation");
+
+LExit:
+    er = SUCCEEDED(hr) ? ERROR_SUCCESS : ERROR_INSTALL_FAILURE;
+    return WcaFinalize(er);
+}
 {
     HRESULT hr = S_OK;
     UINT er = ERROR_SUCCESS;

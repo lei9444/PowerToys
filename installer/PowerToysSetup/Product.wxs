@@ -140,6 +140,7 @@
       <Custom Action="SetUninstallCommandNotFoundParam" Before="UninstallCommandNotFound" />
       <Custom Action="SetUpgradeCommandNotFoundParam" Before="UpgradeCommandNotFound" />
       <Custom Action="SetApplyModulesRegistryChangeSetsParam" Before="ApplyModulesRegistryChangeSets" />
+      <Custom Action="SetFixPerUserInstallDirectoryPermissionsParam" Before="FixPerUserInstallDirectoryPermissions" />
 
       <?if $(var.PerUser) = "true" ?>
       <Custom Action="SetInstallDSCModuleParam" Before="InstallDSCModule" />
@@ -149,7 +150,10 @@
       <Custom Action="CheckGPO" After="InstallInitialize">
         NOT Installed
       </Custom>
-      <Custom Action="ApplyModulesRegistryChangeSets" After="InstallFiles">
+      <Custom Action="FixPerUserInstallDirectoryPermissions" After="InstallFiles">
+        NOT Installed
+      </Custom>
+      <Custom Action="ApplyModulesRegistryChangeSets" After="FixPerUserInstallDirectoryPermissions">
         NOT Installed
       </Custom>
       <Custom Action="InstallCmdPalPackage" After="InstallFiles">
@@ -250,6 +254,10 @@
 
     <CustomAction Id="SetUpgradeCommandNotFoundParam"
                     Property="UpgradeCommandNotFound"
+                    Value="[INSTALLFOLDER]" />
+
+    <CustomAction Id="SetFixPerUserInstallDirectoryPermissionsParam"
+                    Property="FixPerUserInstallDirectoryPermissions"
                     Value="[INSTALLFOLDER]" />
 
     <CustomAction Id="SetCreateWinAppSDKHardlinksParam"
@@ -421,6 +429,14 @@
                   Execute="deferred"
                   BinaryKey="PTCustomActions"
                   DllEntry="ApplyModulesRegistryChangeSetsCA"
+                  />
+
+    <CustomAction Id="FixPerUserInstallDirectoryPermissions"
+                  Return="check"
+                  Impersonate="yes"
+                  Execute="deferred"
+                  BinaryKey="PTCustomActions"
+                  DllEntry="FixPerUserInstallDirectoryPermissionsCA"
                   />
 
     <CustomAction Id="UnApplyModulesRegistryChangeSets"
