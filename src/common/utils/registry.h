@@ -459,6 +459,9 @@ namespace registry
 
             // Normalize and quote the DLL path to ensure proper COM registration
             std::wstring normalizedPathToHandler = normalizePathForComRegistration(fullPathToHandler);
+            
+            // Log the path transformation for debugging
+            Logger::info(L"Registering preview handler: {} -> {}", fullPathToHandler, normalizedPathToHandler);
 
             using vec_t = std::vector<registry::ValueChange>;
             // TODO: verify that we actually need all of those
@@ -501,6 +504,20 @@ namespace registry
 
                 changes.push_back({ scope, clsidPath, L"AppID", previewHostClsid });
                 changes.push_back({ scope, previewHandlerListPath, handlerClsid, displayName });
+                
+                // For user-directory installations, add additional AppID configuration to ensure proper COM activation
+                if (perUser)
+                {
+                    std::wstring appIdPath = L"Software\\Classes\\AppID\\" + previewHostClsid;
+                    // These settings help ensure the preview handler can be activated properly from different security contexts
+                    changes.push_back({ scope, appIdPath, L"DllSurrogate", L"" }); // Use default surrogate (prevhost.exe)
+                    changes.push_back({ scope, appIdPath, L"AppIDFlags", DWORD(0x4) }); // APPIDREGFLAGS_ACTIVATE_IUSERVER_INDESKTOP
+                    
+                    // Add authentication level to ensure proper security context
+                    changes.push_back({ scope, appIdPath, L"AuthenticationLevel", DWORD(1) }); // RPC_C_AUTHN_LEVEL_NONE
+                    
+                    Logger::info(L"Added per-user AppID configuration for preview handler in: {}", normalizedPathToHandler);
+                }
             }
 
             return registry::ChangeSet{ .changes = std::move(changes) };
