@@ -1209,17 +1209,28 @@ UINT __stdcall FixPerUserInstallDirectoryPermissionsCA(MSIHANDLE hInstall)
 
     CloseHandle(hToken);
 
-    // Create an ACL that allows full control for the current user
+    // Create ACL entries for both the current user and Interactive Users
+    // This ensures preview handlers work properly in different security contexts
     PACL pACL = NULL;
-    EXPLICIT_ACCESS ea = {};
-    ea.grfAccessPermissions = GENERIC_ALL;
-    ea.grfAccessMode = SET_ACCESS;
-    ea.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
-    ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
-    ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
-    ea.Trustee.ptstrName = (LPTSTR)pTokenUser->User.Sid;
+    EXPLICIT_ACCESS ea[2] = {};
+    
+    // Entry for current user
+    ea[0].grfAccessPermissions = FILE_ALL_ACCESS;
+    ea[0].grfAccessMode = SET_ACCESS;
+    ea[0].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+    ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea[0].Trustee.ptstrName = (LPTSTR)pTokenUser->User.Sid;
+    
+    // Entry for Interactive Users (this helps with preview handlers running in different contexts)
+    ea[1].grfAccessPermissions = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
+    ea[1].grfAccessMode = SET_ACCESS;
+    ea[1].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+    ea[1].Trustee.TrusteeForm = TRUSTEE_IS_NAME;
+    ea[1].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+    ea[1].Trustee.ptstrName = const_cast<LPWSTR>(L"INTERACTIVE");
 
-    DWORD dwRes = SetEntriesInAcl(1, &ea, NULL, &pACL);
+    DWORD dwRes = SetEntriesInAcl(2, ea, NULL, &pACL);
     if (ERROR_SUCCESS != dwRes)
     {
         hr = HRESULT_FROM_WIN32(dwRes);
