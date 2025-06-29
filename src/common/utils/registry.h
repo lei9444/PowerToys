@@ -387,6 +387,17 @@ namespace registry
             thumbnail
         };
 
+        // Helper function to properly quote DLL paths for COM registration
+        inline std::wstring quotePathIfNeeded(const std::wstring& path)
+        {
+            // If path contains spaces, it should be quoted for proper COM registration
+            if (path.find(L' ') != std::wstring::npos)
+            {
+                return L"\"" + path + L"\"";
+            }
+            return path;
+        }
+
         inline registry::ChangeSet generatePreviewHandler(const PreviewHandlerType handlerType,
                                                           const bool perUser,
                                                           std::wstring handlerClsid,
@@ -426,11 +437,14 @@ namespace registry
             versionPath += L'\\';
             versionPath += powertoysVersion;
 
+            // Quote the DLL path if it contains spaces to ensure proper COM registration
+            std::wstring quotedPathToHandler = quotePathIfNeeded(fullPathToHandler);
+
             using vec_t = std::vector<registry::ValueChange>;
             // TODO: verify that we actually need all of those
             vec_t changes = { { scope, clsidPath, L"DisplayName", displayName },
                               { scope, clsidPath, std::nullopt, className },
-                              { scope, inprocServerPath, std::nullopt, fullPathToHandler },
+                              { scope, inprocServerPath, std::nullopt, quotedPathToHandler },
                               { scope, inprocServerPath, L"Assembly", assemblyKeyValue },
                               { scope, inprocServerPath, L"Class", className },
                               { scope, inprocServerPath, L"ThreadingModel", L"Apartment" } };
