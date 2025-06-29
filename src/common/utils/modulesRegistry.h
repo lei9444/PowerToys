@@ -8,8 +8,8 @@
 
 namespace fs = std::filesystem;
 
-// Import quotePathIfNeeded function from registry namespace
-using registry::shellex::quotePathIfNeeded;
+// Import path normalization function from registry namespace
+using registry::shellex::normalizePathForComRegistration;
 
 namespace NonLocalizable
 {
@@ -243,11 +243,11 @@ inline registry::ChangeSet getRegistryPreviewSetDefaultAppChangeSet(const std::w
     std::wstring registryKeyPrefix = L"Software\\Classes\\";
 
     std::wstring appPath = installationDir + L"\\WinUI3Apps\\PowerToys.RegistryPreview.exe";
-    std::wstring quotedAppPath = quotePathIfNeeded(appPath);
-    std::wstring command = quotedAppPath + L" \"----ms-protocol:ms-encodedlaunch:App?ContractId=Windows.File&Verb=open&File=%1\"";
+    std::wstring normalizedAppPath = normalizePathForComRegistration(appPath);
+    std::wstring command = normalizedAppPath + L" \"----ms-protocol:ms-encodedlaunch:App?ContractId=Windows.File&Verb=open&File=%1\"";
 
     changes.push_back({ scope, registryKeyPrefix + fullAppName + L"\\" + L"Application", L"ApplicationName", appName });
-    changes.push_back({ scope, registryKeyPrefix + fullAppName + L"\\" + L"DefaultIcon", std::nullopt, quotedAppPath });
+    changes.push_back({ scope, registryKeyPrefix + fullAppName + L"\\" + L"DefaultIcon", std::nullopt, normalizedAppPath });
     changes.push_back({ scope, registryKeyPrefix + fullAppName + L"\\" + L"shell\\open\\command", std::nullopt, command });
     changes.push_back({ scope, registryKeyPrefix + L".reg\\OpenWithProgIDs", fullAppName, L"" });
 
@@ -262,14 +262,14 @@ inline registry::ChangeSet getRegistryPreviewChangeSet(const std::wstring instal
     vec_t changes;
 
     std::wstring exePath = installationDir + L"\\WinUI3Apps\\PowerToys.RegistryPreview.exe";
-    std::wstring quotedExePath = quotePathIfNeeded(exePath);
-    std::wstring command = quotedExePath + L" \"%1\"";
+    std::wstring normalizedExePath = normalizePathForComRegistration(exePath);
+    std::wstring command = normalizedExePath + L" \"%1\"";
     changes.push_back({ scope, L"Software\\Classes\\regfile\\shell\\preview\\command", std::nullopt, command });
 
     std::wstring icon_path = installationDir;
     icon_path.append(L"\\WinUI3Apps\\Assets\\RegistryPreview\\RegistryPreview.ico");
-    std::wstring quotedIconPath = quotePathIfNeeded(icon_path);
-    changes.push_back({ scope, L"Software\\Classes\\regfile\\shell\\preview", L"icon", quotedIconPath });
+    std::wstring normalizedIconPath = normalizePathForComRegistration(icon_path);
+    changes.push_back({ scope, L"Software\\Classes\\regfile\\shell\\preview", L"icon", normalizedIconPath });
 
     return { changes };
 }

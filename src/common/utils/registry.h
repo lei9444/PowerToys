@@ -398,6 +398,26 @@ namespace registry
             return path;
         }
 
+        // Helper function to normalize and resolve DLL paths for COM registration
+        inline std::wstring normalizePathForComRegistration(const std::wstring& path)
+        {
+            try 
+            {
+                // Normalize the path to handle any relative components or inconsistencies
+                auto normalizedPath = std::filesystem::canonical(std::filesystem::path(path));
+                auto pathStr = normalizedPath.wstring();
+                
+                // Quote if needed and return
+                return quotePathIfNeeded(pathStr);
+            }
+            catch (const std::filesystem::filesystem_error&)
+            {
+                // If canonicalization fails (file doesn't exist), fall back to the original path
+                // This can happen during installation when files aren't copied yet
+                return quotePathIfNeeded(path);
+            }
+        }
+
         inline registry::ChangeSet generatePreviewHandler(const PreviewHandlerType handlerType,
                                                           const bool perUser,
                                                           std::wstring handlerClsid,
@@ -437,14 +457,14 @@ namespace registry
             versionPath += L'\\';
             versionPath += powertoysVersion;
 
-            // Quote the DLL path if it contains spaces to ensure proper COM registration
-            std::wstring quotedPathToHandler = quotePathIfNeeded(fullPathToHandler);
+            // Normalize and quote the DLL path to ensure proper COM registration
+            std::wstring normalizedPathToHandler = normalizePathForComRegistration(fullPathToHandler);
 
             using vec_t = std::vector<registry::ValueChange>;
             // TODO: verify that we actually need all of those
             vec_t changes = { { scope, clsidPath, L"DisplayName", displayName },
                               { scope, clsidPath, std::nullopt, className },
-                              { scope, inprocServerPath, std::nullopt, quotedPathToHandler },
+                              { scope, inprocServerPath, std::nullopt, normalizedPathToHandler },
                               { scope, inprocServerPath, L"Assembly", assemblyKeyValue },
                               { scope, inprocServerPath, L"Class", className },
                               { scope, inprocServerPath, L"ThreadingModel", L"Apartment" } };
