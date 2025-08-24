@@ -97,26 +97,37 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
                             // Only show first 10 pages.
                             for (uint i = 0; i < pdf.PageCount && i < 10; i++)
                             {
-                                using var page = pdf.GetPage(i);
-                                var image = PageToImage(page);
-
-                                var picturePanel = new Panel()
+                                try
                                 {
-                                    Name = "picturePanel",
-                                    Margin = new Padding(6, 6, 6, 0),
-                                    Size = CalculateSize(image),
-                                    BorderStyle = BorderStyle.FixedSingle,
-                                };
+                                    using var page = pdf.GetPage(i);
+                                    var image = PageToImage(page);
 
-                                var picture = new PictureBox
+                                    if (image != null)
+                                    {
+                                        var picturePanel = new Panel()
+                                        {
+                                            Name = "picturePanel",
+                                            Margin = new Padding(6, 6, 6, 0),
+                                            Size = CalculateSize(image),
+                                            BorderStyle = BorderStyle.FixedSingle,
+                                        };
+
+                                        var picture = new PictureBox
+                                        {
+                                            Dock = DockStyle.Fill,
+                                            Image = image,
+                                            SizeMode = PictureBoxSizeMode.Zoom,
+                                        };
+
+                                        picturePanel.Controls.Add(picture);
+                                        _flowLayoutPanel.Controls.Add(picturePanel);
+                                    }
+                                }
+                                catch (Exception pageEx)
                                 {
-                                    Dock = DockStyle.Fill,
-                                    Image = image,
-                                    SizeMode = PictureBoxSizeMode.Zoom,
-                                };
-
-                                picturePanel.Controls.Add(picture);
-                                _flowLayoutPanel.Controls.Add(picturePanel);
+                                    // Log the page-specific error but continue with other pages
+                                    System.Diagnostics.Debug.WriteLine($"Error rendering PDF page {i}: {pageEx.Message}");
+                                }
                             }
 
                             if (pdf.PageCount > 10)
@@ -198,17 +209,24 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
         private void FlowLayoutPanel_Resize(object sender, EventArgs e)
         {
             this.SuspendLayout();
-            _flowLayoutPanel.SuspendLayout();
+            _flowLayoutPanel?.SuspendLayout();
 
-            foreach (Panel panel in _flowLayoutPanel.Controls.Find("picturePanel", false))
+            if (_flowLayoutPanel != null)
             {
-                var pictureBox = panel.Controls[0] as PictureBox;
-                var image = pictureBox.Image;
-
-                panel.Size = CalculateSize(image);
+                foreach (Panel panel in _flowLayoutPanel.Controls.Find("picturePanel", false))
+                {
+                    if (panel.Controls.Count > 0)
+                    {
+                        var pictureBox = panel.Controls[0] as PictureBox;
+                        if (pictureBox?.Image != null)
+                        {
+                            panel.Size = CalculateSize(pictureBox.Image);
+                        }
+                    }
+                }
             }
 
-            _flowLayoutPanel.ResumeLayout(false);
+            _flowLayoutPanel?.ResumeLayout(false);
             this.ResumeLayout(false);
         }
 
@@ -223,9 +241,12 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
 
             using (var stream = new InMemoryRandomAccessStream())
             {
+                // Ensure we have a reasonable minimum width
+                uint width = (uint)Math.Max(this.ClientSize.Width, 100);
+                
                 page.RenderToStreamAsync(stream, new PdfPageRenderOptions()
                 {
-                    DestinationWidth = (uint)this.ClientSize.Width,
+                    DestinationWidth = width,
                 }).GetAwaiter().GetResult();
 
                 stream.Seek(0); // Reset the stream position to the beginning before reading.
@@ -243,7 +264,12 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
         /// <returns>New size off the panel.</returns>
         private Size CalculateSize(Image pdfImage)
         {
-            var hasScrollBar = _flowLayoutPanel.VerticalScroll.Visible;
+            if (pdfImage == null || pdfImage.Width <= 0 || pdfImage.Height <= 0)
+            {
+                return new Size(100, 100); // Return a default size if image is invalid
+            }
+
+            var hasScrollBar = _flowLayoutPanel?.VerticalScroll.Visible ?? false;
 
             // Add 12px margin to the image by making it 12px smaller.
             int width = this.ClientSize.Width - 12;
@@ -255,13 +281,21 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
                 width -= scrollBarSizeWidth;
             }
 
+            // Ensure minimum width
+            width = Math.Max(width, 50);
+
             int originalWidth = pdfImage.Width;
             int originalHeight = pdfImage.Height;
+            
+            if (originalWidth <= 0)
+            {
+                return new Size(width, 100); // Return default height if original width is invalid
+            }
+            
             float percentWidth = (float)width / originalWidth;
-
             int newHeight = (int)(originalHeight * percentWidth);
 
-            return new Size(width, newHeight);
+            return new Size(width, Math.Max(newHeight, 50)); // Ensure minimum height
         }
 
         /// <summary>

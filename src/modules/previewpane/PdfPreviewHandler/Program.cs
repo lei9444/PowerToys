@@ -13,7 +13,7 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
     internal static class Program
     {
         private static CancellationTokenSource _tokenSource = new CancellationTokenSource();
-
+        private static readonly object _lockObject = new object();
         private static PdfPreviewHandlerControl _previewHandlerControl;
 
         /// <summary>
@@ -27,43 +27,67 @@ namespace Microsoft.PowerToys.PreviewHandler.Pdf
             {
                 if (args.Length == 6)
                 {
-                    ETWTrace etwTrace = new ETWTrace(Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE"), "AppData", "LocalLow", "Microsoft", "PowerToys", "etw"));
-
-                    string filePath = args[0];
-                    IntPtr hwnd = IntPtr.Parse(args[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-
-                    int left = Convert.ToInt32(args[2], 10);
-                    int right = Convert.ToInt32(args[3], 10);
-                    int top = Convert.ToInt32(args[4], 10);
-                    int bottom = Convert.ToInt32(args[5], 10);
-                    Rectangle s = new Rectangle(left, top, right - left, bottom - top);
-
-                    _previewHandlerControl = new PdfPreviewHandlerControl();
-
-                    if (!_previewHandlerControl.SetWindow(hwnd, s))
+                    ETWTrace etwTrace = null;
+                    try
                     {
-                        return;
-                    }
+                        etwTrace = new ETWTrace(Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE"), "AppData", "LocalLow", "Microsoft", "PowerToys", "etw"));
 
-                    _previewHandlerControl.DoPreview(filePath);
+                        string filePath = args[0];
+                        IntPtr hwnd = IntPtr.Parse(args[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-                    NativeEventWaiter.WaitForEventLoop(
-                        Constants.PdfPreviewResizeEvent(),
-                        () =>
+                        int left = Convert.ToInt32(args[2], 10);
+                        int right = Convert.ToInt32(args[3], 10);
+                        int top = Convert.ToInt32(args[4], 10);
+                        int bottom = Convert.ToInt32(args[5], 10);
+                        Rectangle s = new Rectangle(left, top, right - left, bottom - top);
+
+                        lock (_lockObject)
                         {
-                            Rectangle s = default;
-                            if (!_previewHandlerControl.SetRect(s))
+                            _previewHandlerControl = new PdfPreviewHandlerControl();
+                        }
+
+                        if (!_previewHandlerControl.SetWindow(hwnd, s))
+                        {
+                            return;
+                        }
+
+                        _previewHandlerControl.DoPreview(filePath);
+
+                        NativeEventWaiter.WaitForEventLoop(
+                            Constants.PdfPreviewResizeEvent(),
+                            () =>
                             {
-                                etwTrace?.Dispose();
+                                PdfPreviewHandlerControl control;
+                                lock (_lockObject)
+                                {
+                                    control = _previewHandlerControl;
+                                }
+                                
+                                if (control != null)
+                                {
+                                    Rectangle s = default;
+                                    if (!control.SetRect(s))
+                                    {
+                                        etwTrace?.Dispose();
 
-                                // When the parent HWND became invalid, the application won't respond to Application.Exit().
-                                Environment.Exit(0);
-                            }
-                        },
-                        Dispatcher.CurrentDispatcher,
-                        _tokenSource.Token);
-
-                    etwTrace?.Dispose();
+                                        // When the parent HWND became invalid, the application won't respond to Application.Exit().
+                                        Environment.Exit(0);
+                                    }
+                                }
+                            },
+                            Dispatcher.CurrentDispatcher,
+                            _tokenSource.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the exception or handle it appropriately
+                        // Avoid showing message boxes in preview handlers as they can cause issues
+                        System.Diagnostics.Debug.WriteLine($"PdfPreviewHandler error: {ex.Message}");
+                    }
+                    finally
+                    {
+                        etwTrace?.Dispose();
+                    }
                 }
                 else
                 {
